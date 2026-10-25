@@ -45,8 +45,8 @@ jobs:
 
       - name: Deploy to gh-pages
         run: |
-          # Check if feed.xml changed
-          if git diff --quiet feed.xml; then
+          # Check if feed.xml changed (skip only if tracked AND unchanged)
+          if git ls-files --error-unmatch feed.xml >/dev/null 2>&1 && git diff --quiet feed.xml; then
             echo "No changes in feed.xml"
             exit 0
           fi
