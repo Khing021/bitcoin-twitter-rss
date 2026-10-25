@@ -1,0 +1,71 @@
+name: Fetch Tweets & Generate RSS
+
+on:
+  schedule:
+    # Run every 2 hours
+    - cron: '0 */2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write  # Needed to commit to gh-pages
+
+env:
+  # Optional: Add Twitter account cookies for higher rate limits
+  # Get these from browser dev tools (Application → Cookies → x.com)
+  # TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
+  # TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
+
+jobs:
+  fetch-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for gh-pages
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install twscrape lxml
+
+      - name: Fetch tweets and generate RSS
+        env:
+          TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
+          TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
+        run: |
+          python fetch_tweets.py
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy to gh-pages
+        run: |
+          # Check if feed.xml changed
+          if git diff --quiet feed.xml; then
+            echo "No changes in feed.xml"
+            exit 0
+          fi
+          
+          # Create or switch to gh-pages branch
+          git checkout -B gh-pages
+          
+          # Copy feed.xml to root
+          cp feed.xml ./feed.xml
+          
+          # Commit and push
+          git add feed.xml
+          git commit -m "Update RSS feed: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin gh-pages --force
+          
+          echo "RSS feed published to gh-pages"
+          echo "Feed URL: https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/feed.xml"
