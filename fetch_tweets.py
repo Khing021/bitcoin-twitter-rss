@@ -179,28 +179,53 @@ async def setup_api() -> API:
     """Set up twscrape API with guest token or account cookies."""
     api = API()
     
-    # Option 1: Use account cookies from environment (more reliable)
+    # Option 1: Use account username/password from environment (most reliable)
+    username = os.environ.get("TWITTER_USERNAME")
+    password = os.environ.get("TWITTER_PASSWORD")
+    email = os.environ.get("TWITTER_EMAIL")
+    email_password = os.environ.get("TWITTER_EMAIL_PASSWORD")
+    
+    if username and password:
+        print("Using Twitter account credentials from environment...")
+        try:
+            await api.pool.add_account(
+                "twitter_account", 
+                password,  # password
+                email or "",  # email (optional)
+                email_password or "",  # email_password (optional)
+            )
+            await api.pool.login_all()
+            print("Account authenticated successfully via login")
+            return api
+        except Exception as e:
+            print(f"Failed to use account credentials: {e}")
+            print("Falling back to cookies...")
+    
+    # Option 2: Use account cookies from environment (may not work)
     auth_token = os.environ.get("TWITTER_AUTH_TOKEN")
     ct0 = os.environ.get("TWITTER_CT0")
     
     if auth_token and ct0:
         print("Using Twitter account cookies from environment...")
         try:
+            import json
+            cookies_json = json.dumps({"auth_token": auth_token, "ct0": ct0})
             await api.pool.add_account(
                 "twitter_account", 
                 "",  # password not needed with cookies
                 "",  # email not needed
                 "",  # email_password not needed
-                cookies={"auth_token": auth_token, "ct0": ct0}
+                cookies=cookies_json
             )
-            await api.pool.login_all()
-            print("Account authenticated successfully")
+            # Account added with cookies is already active (active=True)
+            # No need to call login_all() - it would try to login guest too
+            print("Account authenticated successfully via cookies")
             return api
         except Exception as e:
             print(f"Failed to use account cookies: {e}")
             print("Falling back to guest token...")
     
-    # Option 2: Use guest token (may be blocked on some IPs)
+    # Option 3: Use guest token (may be blocked on some IPs)
     print("Attempting guest token...")
     try:
         await api.pool.add_account("guest", "", "", "")
